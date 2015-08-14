@@ -39,9 +39,8 @@ login_details[:Password] = ask("Enter password: "){|q| q.echo = "*"}
 json_login = JSON.generate(login_details)
 
 login_to_mbank = mechanize.post(urls[:login],json_login,{'Content-Type' => 'application/json; charset=utf-8'})
-puts json_login
 puts 'How did the login go?'
-puts login_to_mbank.body
+puts JSON.parse(login_to_mbank.body)["successful"]
 
 mechanize.get(urls[:main])
 top_page = mechanize.get(urls[:top])
