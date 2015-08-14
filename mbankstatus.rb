@@ -41,8 +41,8 @@ puts json_login
 puts 'How did the login go?'
 puts login_to_mbank.body
 
-main_page = mechanize.get(urls[:main])
-puts main_page.body
+#main_page = mechanize.get(urls[:main])
+#puts main_page.body
 
 #Doesn't work. Gives me server 500
 #empty_json = JSON.generate({})
