@@ -4,6 +4,7 @@ require 'json'
 require 'mechanize'
 require 'securerandom'
 require 'highline/import'
+require 'nokogiri'
 
 login_url = 'https://online.mbank.pl/pl/Login'
 
@@ -12,7 +13,9 @@ urls = {
 	account_list: 'https://online.mbank.pl/pl/MyDesktop/Desktop/GetAccountsList',
 	logout: 'https://online.mbank.pl/pl/LoginMain/Account/Logout',
 	main: 'https://online.mbank.pl/pl',
-	top: 'https://online.mbank.pl/csite/top.aspx'
+	top: 'https://online.mbank.pl/csite/top.aspx',
+        set_nav_data: 'https://online.mbank.pl/pl/MyDesktop/Desktop/SetNavigationDataForAccount',
+        details_for_nav: 'https://online.mbank.pl/pl/Accounts/Accounts/DetailsForNav',
 }
 
 mechanize = Mechanize.new
@@ -42,14 +45,47 @@ login_to_mbank = mechanize.post(urls[:login],json_login,{'Content-Type' => 'appl
 puts 'How did the login go?'
 puts JSON.parse(login_to_mbank.body)["successful"]
 
-mechanize.get(urls[:main])
+main_page = mechanize.get(urls[:main])
+page = Nokogiri::HTML(main_page.body, &:noblanks)
+ajax_token = page.css("meta[name='__AjaxRequestVerificationToken']").attr("content")
+puts "Retrieved AJAX token: '#{ajax_token}'"
+
 top_page = mechanize.get(urls[:top])
 puts top_page.body
 
-#Doesn't work. Gives me server 500
-#empty_json = JSON.generate({})
-#account_list = mechanize.post(urls[:account_list],'{}',{'Content-Type' => 'application/json'})
-#puts account_list.body
+account_list = mechanize.post(urls[:account_list],'{}',{
+                                'X-Requested-With' => 'XMLHttpRequest',
+                                'X-Request-Verification-Token' => ajax_token,
+                                'X-Tab-Id' => mechanize.cookies.select { |c| c.name == 'mBank_tabId' }.shift.value
+                              })
+
+accounts = JSON.parse(account_list.body)
+
+puts accounts
+
+for account in accounts['accountDetailsList'] do
+  type = account['ProductName']
+  iban = account['AccountNumber']
+  currency = account['Currency']
+  balance = account['Balance']
+  avail_balance = account['AvailableBalance']
+  puts "Account type='#{type}' iban='#{iban}' balance='#{balance} #{currency} (avail #{avail_balance} #{currency})' "
+
+  # Get teh account details
+  nav_select = mechanize.post(urls[:set_nav_data], { 'accountNumber' => iban }, {
+                                'X-Requested-With' => 'XMLHttpRequest',
+                                'X-Request-Verification-Token' => ajax_token,
+                                'X-Tab-Id' => mechanize.cookies.select { |c| c.name == 'mBank_tabId' }.shift.value
+                              } )
+
+  nav_details = mechanize.post(urls[:details_for_nav], '', {
+                                'X-Requested-With' => 'XMLHttpRequest',
+                                'X-Request-Verification-Token' => ajax_token,
+                                'X-Tab-Id' => mechanize.cookies.select { |c| c.name == 'mBank_tabId' }.shift.value
+                              } )
+  puts JSON.parse(nav_details.body)
+  puts ""
+end
 
 #logout
 mechanize.get(urls[:logout])
